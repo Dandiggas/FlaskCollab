@@ -1,11 +1,14 @@
-
 from flask import Flask, request, jsonify
+import os
 import hashlib
 
 app = Flask(__name__)
 
 
 users_db = {}
+
+CERT_PEM_PATH = 'certificate/cert.pem'
+KEY_PEM_PATH = 'certificate/key.pem'
 
 @app.route('/')
 def hello():
@@ -51,4 +54,9 @@ def login():
         return jsonify({'message': 'Incorrect password.'}), 401
 
 if __name__ == '__main__':
-    app.run(debug=True, port=2000)
+    if os.path.exists(CERT_PEM_PATH) and os.path.exists(KEY_PEM_PATH):
+        app.run(debug=True, port=2000, ssl_context=(CERT_PEM_PATH, KEY_PEM_PATH))
+    else:
+        print("Certificate and key not found, starting in HTTP mode.")
+        app.run(debug=True, port=2000)
+
