@@ -9,12 +9,12 @@ The authentication system is implemented as a simple flask app, serving endpoint
 - Authenticating users
 
 ### Hashed passwords
-The server allows registering new users and authetnicating existing users. The passwords are hashed using the BCrypt algorithm (TODO, currently SHA256), and the hashes are stored in memory. When a user authenticates, the provided password is hashed and compared to the stored hash.
+The server allows registering new users and authenticating existing users. The passwords are hashed using the SCrypt algorithm, and the hashes are stored in memory. When a user authenticates, the provided password is hashed and compared to the stored hash.
 
-### Salting (TODO)
+### Salting
 Prior to hashing the provided password, a random salt is generated and appended to it, to counteract rainbow table attacks.
 
-### HTTPS (TODO)
+### HTTPS
 The backend is setup to serve its endpoins over HTTPS. The HTTPS certificate is self-signed rather than provided by a Certificate Authority, hence any user that wants to interact with the endpoints need to add the certificate to their trust store.
 
 ### JWT Token (TODO)
