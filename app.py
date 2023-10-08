@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 import os
 import hashlib
 import argparse
+import base64
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -9,6 +11,7 @@ users_db = {}
 
 CERT_PEM_PATH = 'certificate/cert.pem'
 KEY_PEM_PATH = 'certificate/key.pem'
+JWT_SIG_KEY = os.urandom(24).hex()
 SALT_LENGTH = 16
 
 # scrypt parameters
@@ -80,6 +83,10 @@ if __name__ == '__main__':
         print("Certificate and key not found, starting in HTTP mode.")
         app.run(debug=True, port=2000)
 
-    
+# Helper functions for  jwt functions
+def base64UrlEncode(data):
+    return base64.urlsafe_b64encode(data).rstrip(b'=')
 
-
+def base64UrlDecode(base64Url):
+    padding = b'=' * (4 - (len(base64Url) % 4))
+    return base64.urlsafe_b64decode(base64Url + padding)
