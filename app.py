@@ -3,6 +3,8 @@ import os
 import hashlib
 import argparse
 import base64
+import json
+import hmac
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -11,7 +13,7 @@ users_db = {}
 
 CERT_PEM_PATH = 'certificate/cert.pem'
 KEY_PEM_PATH = 'certificate/key.pem'
-JWT_SIG_KEY = os.urandom(24).hex()
+JWT_SIG_KEY = os.urandom(24).hex() # A random key for signing JWT tokens
 SALT_LENGTH = 16
 
 # scrypt parameters
@@ -83,10 +85,19 @@ if __name__ == '__main__':
         print("Certificate and key not found, starting in HTTP mode.")
         app.run(debug=True, port=2000)
 
-# Helper functions for  jwt functions
-def base64UrlEncode(data):
-    return base64.urlsafe_b64encode(data).rstrip(b'=')
+def encode_jwt_header():
+    header = {
+        "alg": "HS256",
+        "typ": "JWT"
+    }
+    header_encoded = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
+    return header_encoded
 
-def base64UrlDecode(base64Url):
-    padding = b'=' * (4 - (len(base64Url) % 4))
-    return base64.urlsafe_b64decode(base64Url + padding)
+def encode_jwt_payload(payload: dict):
+    encoded_payload = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    return encoded_payload
+
+def encode_jwt_signature(b64_encoded_header: str, b64_encoded_payload: str):
+    signature = hmac.new(JWT_SIG_KEY.encode("utf-8"), (b64_encoded_header + '.' + b64_encoded_payload).encode("utf-8"), hashlib.sha256).digest()
+    b64_encoded_signature = base64.urlsafe_b64encode(signature).decode().rstrip("=")
+    return b64_encoded_signature
