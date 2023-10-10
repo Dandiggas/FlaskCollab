@@ -5,6 +5,7 @@ import argparse
 import base64
 import json
 import hmac
+from functools import wraps
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -21,7 +22,33 @@ N = 16384 # CPU/memory cost factor. Must be a power of 2.
 R = 8     # Block size
 P = 1     # Parallelization factor
 
-@app.route('/')
+def verify_jwt(token: str) -> dict:
+    try:
+        header_encoded, payload_encoded, signature_encoded = token.split(".")
+        payload = json.loads(base64.urlsafe_b64decode(payload_encoded + "==").decode("utf-8"))
+        expected_signature = encode_jwt_signature(header_encoded, payload_encoded)
+        if signature_encoded != expected_signature:
+            raise ValueError("Signature mismatch.")
+        return payload
+    except Exception as e:
+        print(f"JWT verification error: {e}")
+        return None
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"message": "Missing or invalid token"}), 403
+        token = auth_header.split(" ")[1]
+        payload = verify_jwt(token)
+        if not payload:
+            return jsonify({"message": "Invalid token"}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/my-user-page', methods=['GET'])
+@requires_auth
 def hello():
     return "hello world"
 
@@ -63,9 +90,39 @@ def login():
     stored_password = users_db[username]['hashed_password']
 
     if stored_password == hashed_password:
-        return jsonify({'message': 'Login successful.', 'token': 'your_generated_token'}), 200
+
+        payload = {
+            "username": username,
+            "exp": (datetime.utcnow() + timedelta(days=1)).timestamp()  # 1 day expiration
+        }
+
+        token = generate_jwt(payload)
+        return jsonify({'message': 'Login successful.', 'token': token}), 200
     else:
         return jsonify({'message': 'Incorrect password.'}), 401
+
+def generate_jwt(payload: dict) -> str:
+    header_encoded = encode_jwt_header()
+    payload_encoded = encode_jwt_payload(payload)
+    signature_encoded = encode_jwt_signature(header_encoded, payload_encoded)
+    return f"{header_encoded}.{payload_encoded}.{signature_encoded}"
+
+def encode_jwt_header():
+    header = {
+        "alg": "HS256",
+        "typ": "JWT"
+    }
+    header_encoded = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
+    return header_encoded
+
+def encode_jwt_payload(payload: dict):
+    encoded_payload = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    return encoded_payload
+
+def encode_jwt_signature(b64_encoded_header: str, b64_encoded_payload: str):
+    signature = hmac.new(JWT_SIG_KEY.encode("utf-8"), (b64_encoded_header + '.' + b64_encoded_payload).encode("utf-8"), hashlib.sha256).digest()
+    b64_encoded_signature = base64.urlsafe_b64encode(signature).decode().rstrip("=")
+    return b64_encoded_signature
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="My Python App")
@@ -84,20 +141,3 @@ if __name__ == '__main__':
     else:
         print("Certificate and key not found, starting in HTTP mode.")
         app.run(debug=True, port=2000)
-
-def encode_jwt_header():
-    header = {
-        "alg": "HS256",
-        "typ": "JWT"
-    }
-    header_encoded = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
-    return header_encoded
-
-def encode_jwt_payload(payload: dict):
-    encoded_payload = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
-    return encoded_payload
-
-def encode_jwt_signature(b64_encoded_header: str, b64_encoded_payload: str):
-    signature = hmac.new(JWT_SIG_KEY.encode("utf-8"), (b64_encoded_header + '.' + b64_encoded_payload).encode("utf-8"), hashlib.sha256).digest()
-    b64_encoded_signature = base64.urlsafe_b64encode(signature).decode().rstrip("=")
-    return b64_encoded_signature
