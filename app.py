@@ -29,6 +29,8 @@ def verify_jwt(token: str) -> dict:
         expected_signature = encode_jwt_signature(header_encoded, payload_encoded)
         if signature_encoded != expected_signature:
             raise ValueError("Signature mismatch.")
+        if datetime.utcnow().timestamp() > payload.get("exp"):
+            raise ValueError("Token has expired.")
         return payload
     except Exception as e:
         print(f"JWT verification error: {e}")
@@ -47,10 +49,18 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated_function
 
-@app.route('/my-user-page', methods=['GET'])
+@app.route('/my-user-page/<username>', methods=['GET'])
 @requires_auth
-def hello():
-    return "hello world"
+def user_page(username):
+    auth_header = request.headers.get("Authorization")
+    token = auth_header.split(" ")[1] # Splitting "Bearer <jwt-token>"
+    payload = verify_jwt(token)
+
+    # Check if the username in the JWT matches the username in the URL
+    if payload and payload.get("username") == username:
+        return f"Hello, {username}!"
+    else:
+        return jsonify({"message": "You are not authorized to view this page."}), 403
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -68,7 +78,7 @@ def register():
     if username in users_db:
         return jsonify({'message': 'Username already exists.'}), 400
     
-    users_db[username] = {'salt': salt, 'hashed_password': hashed_password}
+    users_db[username] = {'salt': salt, 'hashed_password': hashed_password, 'role': 'user'}
     print(users_db)
     
     return jsonify({'message': 'Registration successful.'}), 201
