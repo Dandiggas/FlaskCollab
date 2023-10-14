@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
 import hashlib
 import argparse
@@ -139,12 +140,16 @@ if __name__ == '__main__':
 
     # Add the --enable-salting flag. The 'action' parameter is set to 'store_true', which means the corresponding variable will be set to True if the flag is provided.
     parser.add_argument("--enable-salting", help="Enable salting feature", action="store_true")
+    parser.add_argument("--enable-cors", help="Enable CORS support", action="store_true")
 
     # Parse the command line arguments
     args = parser.parse_args()
 
     global use_salting
     use_salting = args.enable_salting
+
+    if args.enable_cors:
+        CORS(app)
 
     if os.path.exists(CERT_PEM_PATH) and os.path.exists(KEY_PEM_PATH):
         app.run(debug=True, port=2000, ssl_context=(CERT_PEM_PATH, KEY_PEM_PATH))

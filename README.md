@@ -50,7 +50,6 @@ Short-lived JWTs are used along with refresh tokens when they expire are used ra
 ### OAuth (TODO)
 OAuth-based authentication is used so that users can log in using Google, Facebook, or other providers.
 
-
 ### Logging and Monitoring (TODO)
 Keeps track of failed login attempts, suspicious activities, and other security-related events.
 
