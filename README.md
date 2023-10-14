@@ -20,8 +20,14 @@ The backend is setup to serve its endpoins over HTTPS. The HTTPS certificate is 
 ### JWT Token
 The server can generate a JWT token for authenticated users, it is signed using HMAC with symmetric encryption (a secret key kept on the server), with SHA.256 as hashing algorithm. When the user tries to call sensitive endpoints the jwt token is included as an Authorization Bearer token and it is verified that when the signature is rehashes from header + payload using HMAC and the secret key, the calculate signature is the same as the bearer token signature.
 
-### Frontend (TODO)
-App should have a frontend to interact with the authorization endpoints.
+### Frontend 
+App should have a frontend to interact with the authorization endpoints. Currently has basic register and login page capable of communicating with the backend.
+
+#### HTTPS (TODO)
+Frontend should be able to communicate over https.
+
+#### Storing JWT token (TODO)
+Frontend stores JWT token and reuses it in requests.
 
 ### Database (TODO)
 Currently the app uses an in-memory dictionary for storing data, this should be switched to a proper database (like SQLite). This will persist users after a server crash.
