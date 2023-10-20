@@ -50,12 +50,13 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated_function
 
-@app.route('/userpage-test', methods=['GET'])
-def test_endpoint():
+
+@app.route('/userpage/<username>', methods=['GET'])
+@requires_auth
+def userpage(username):
+    print(f"In username endpoint, name: {username}")
     auth_header = request.headers.get("Authorization")
     token = auth_header.split(" ")[1] # Splitting "Bearer <jwt-token>"
-    payload = verify_jwt(token)
-    print(auth_header)
     payload = verify_jwt(token)
 
     # Check if the username in the JWT matches the username in the URL
@@ -63,6 +64,9 @@ def test_endpoint():
         return f"Hello, {username}!"
     else:
         return jsonify({"message": "You are not authorized to view this page."}), 403
+    
+    message = f"Hello {username}"
+    return jsonify(message=message), 200
 
 #@app.route('/my-user-page/<username>', methods=['GET'])
 #@requires_auth
