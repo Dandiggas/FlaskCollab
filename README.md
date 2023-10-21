@@ -26,7 +26,7 @@ App should have a frontend to interact with the authorization endpoints. Current
 #### HTTPS (TODO)
 Frontend should be able to communicate over https.
 
-#### Storing JWT token (TODO)
+#### Storing JWT token
 Frontend stores JWT token and reuses it in requests.
 
 ### Database (TODO)
