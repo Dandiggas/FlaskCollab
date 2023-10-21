@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from collections import namedtuple
 import os
 import hashlib
 import argparse
@@ -8,6 +9,7 @@ import json
 import hmac
 from functools import wraps
 from datetime import datetime, timedelta
+import sqlite3
 
 app = Flask(__name__)
 
@@ -17,6 +19,8 @@ CERT_PEM_PATH = 'certificate/cert.pem'
 KEY_PEM_PATH = 'certificate/key.pem'
 JWT_SIG_KEY = os.urandom(24).hex() # A random key for signing JWT tokens
 SALT_LENGTH = 16
+DB_NAME = "USER_DB"
+DB_TABLE_USER = "USERS"
 
 # scrypt parameters
 N = 16384 # CPU/memory cost factor. Must be a power of 2.
@@ -54,7 +58,7 @@ def requires_auth(f):
 @app.route('/userpage/<username>', methods=['GET'])
 @requires_auth
 def userpage(username):
-    print(f"In username endpoint, name: {username}")
+    print("hello world")
     auth_header = request.headers.get("Authorization")
     token = auth_header.split(" ")[1] # Splitting "Bearer <jwt-token>"
     payload = verify_jwt(token)
@@ -65,23 +69,6 @@ def userpage(username):
     else:
         return jsonify({"message": "You are not authorized to view this page."}), 403
     
-    message = f"Hello {username}"
-    return jsonify(message=message), 200
-
-#@app.route('/my-user-page/<username>', methods=['GET'])
-#@requires_auth
-#def user_page(username):
-#    print(f"In username endpoint, name: {username}")
-#    auth_header = request.headers.get("Authorization")
-#    token = auth_header.split(" ")[1] # Splitting "Bearer <jwt-token>"
-#    payload = verify_jwt(token)
-#
-#    # Check if the username in the JWT matches the username in the URL
-#    if payload and payload.get("username") == username:
-#        return f"Hello, {username}!"
-#    else:
-#        return jsonify({"message": "You are not authorized to view this page."}), 403
-
 @app.route('/register', methods=['POST'])
 def register():
     global use_salting
@@ -95,11 +82,15 @@ def register():
     salt = os.urandom(SALT_LENGTH) if use_salting else b''
     hashed_password = hashlib.scrypt(password, salt=salt, n=N, r=R, p=P) 
     
-    if username in users_db:
-        return jsonify({'message': 'Username already exists.'}), 400
+    try: 
+        user = select_user(username)
+        if user:
+            return jsonify({'message': 'Username already exists.'}), 400
+    except:
+        pass
     
-    users_db[username] = {'salt': salt, 'hashed_password': hashed_password, 'role': 'user'}
-    print(users_db)
+    new_user = {'name': username, 'salt': salt, 'hashed_password': hashed_password, 'role': 'user'}
+    insert_user(new_user)
     
     return jsonify({'message': 'Registration successful.'}), 201
 
@@ -112,20 +103,20 @@ def login():
     username = data['username']
     password = data['password'].encode("utf-8")
     
-    if username not in users_db:
+    try:
+        user_in_db = select_user(username)
+    except:
         return jsonify({'message': 'Username not found.'}), 401
     
-    stored_salt = users_db[username]['salt']
+    stored_salt = user_in_db.salt
     hashed_password = hashlib.scrypt(password, salt=stored_salt, n=N, r=R, p=P) 
-    stored_password = users_db[username]['hashed_password']
+    stored_password = user_in_db.hashed_password
 
     if stored_password == hashed_password:
-
         payload = {
             "username": username,
             "exp": (datetime.utcnow() + timedelta(days=1)).timestamp()  # 1 day expiration
         }
-
         token = generate_jwt(payload)
         return jsonify({'message': 'Login successful.', 'token': token}), 200
     else:
@@ -154,6 +145,73 @@ def encode_jwt_signature(b64_encoded_header: str, b64_encoded_payload: str):
     b64_encoded_signature = base64.urlsafe_b64encode(signature).decode().rstrip("=")
     return b64_encoded_signature
 
+def insert_user(user):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO USERS (name, salt, hashed_password, role) VALUES (?, ?, ?, ?)", (user['name'], user['salt'], user['hashed_password'], user['role']))
+    conn.commit()
+    conn.close()
+
+def select_user(user_name: str):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM USERS WHERE name = ?", (user_name,))
+    row = cursor.fetchone()
+
+    print()
+    if row is None:
+        raise Exception('User not found')
+    
+    # Define a namedtuple type
+    User = namedtuple('User', 'id name hashed_password salt role')
+
+    # Convert the row to a named tuple
+    user = User(*row)
+    
+    conn.close()
+    return user
+
+def initialize_database(db_path, table_name):
+    # Check if the database file exists
+    db_exists = os.path.exists(db_path)
+
+    # Connect to the database; this will create it if it doesn't exist
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    if not db_exists:
+        # If the database didn't exist, it's safe to assume the table doesn't exist
+        print("Database not found. Created new database.")
+        create_table(cursor, table_name)
+    else:
+        # If the database did exist, we need to check for the table
+        print("Database found. Checking if table exists...")
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{DB_TABLE_USER}';")
+
+        # If the table doesn't exist, create it
+        if not cursor.fetchone():
+            print(f"Table '{DB_TABLE_USER}' not found in the database. Creating new table.")
+            create_table(cursor, table_name)
+        else:
+            print(f"Table '{DB_TABLE_USER}' exists.")
+
+    # Don't forget to commit and close the connection
+    conn.commit()
+    conn.close()
+
+def create_table(cursor, table_name):
+    # Here, write the SQL query to create your table, for example:
+    cursor.execute(f'''
+    CREATE TABLE {DB_TABLE_USER} (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        hashed_password TEXT,
+        salt TEXT,
+        role TEXT
+    )
+    ''')
+    print(f"Table '{DB_TABLE_USER}' created successfully.")
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="My Python App")
 
@@ -169,6 +227,8 @@ if __name__ == '__main__':
 
     if args.enable_cors:
         CORS(app)
+
+    initialize_database(DB_NAME, DB_TABLE_USER)
 
     if os.path.exists(CERT_PEM_PATH) and os.path.exists(KEY_PEM_PATH):
         app.run(debug=True, port=2000, ssl_context=(CERT_PEM_PATH, KEY_PEM_PATH))
