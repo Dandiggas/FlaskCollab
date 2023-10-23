@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 from collections import namedtuple
 import os
 import hashlib
@@ -12,8 +11,6 @@ from datetime import datetime, timedelta
 import sqlite3
 
 app = Flask(__name__)
-
-users_db = {}
 
 CERT_PEM_PATH = 'certificate/cert.pem'
 KEY_PEM_PATH = 'certificate/key.pem'
@@ -41,9 +38,20 @@ def verify_jwt(token: str) -> dict:
         print(f"JWT verification error: {e}")
         return None
 
+# Appends headers to be consumed by the browser, indicating what the allowed origins, methods and headers are for incoming requests
+def add_cors_headers(response, methods=None, headers=None, allow_credentials=False):
+    if enable_cors:
+        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000' # TODO: Parametrize / fetch from file the allowed origins
+        response.headers['Access-Control-Allow-Methods'] = ', '.join(methods) if methods != None else ''
+        response.headers['Access-Control-Allow-Headers'] = ', '.join(headers) if headers != None else ''
+        response.headers['Access-Control-Allow-Credentials'] = str(allow_credentials).lower()
+    return response
+
 def requires_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        if request.path.startswith('/userpage') and request.method == 'OPTIONS':
+            return add_cors_headers(jsonify({}), methods=['GET'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization'])
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"message": "Missing or invalid token"}), 403
@@ -54,28 +62,31 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated_function
 
-
-@app.route('/userpage/<username>', methods=['GET'])
+@app.route('/userpage/<username>', methods=['GET', 'OPTIONS'])
 @requires_auth
 def userpage(username):
-    print("hello world")
     auth_header = request.headers.get("Authorization")
     token = auth_header.split(" ")[1] # Splitting "Bearer <jwt-token>"
     payload = verify_jwt(token)
 
     # Check if the username in the JWT matches the username in the URL
     if payload and payload.get("username") == username:
-        return f"Hello, {username}!"
+        response = f"Hello, {username}!"
+        return add_cors_headers(jsonify(response), methods=['GET'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 200
     else:
-        return jsonify({"message": "You are not authorized to view this page."}), 403
+        response = "You are not authorized to view this page."
+        return add_cors_headers(jsonify(response), methods=['GET'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 403
     
-@app.route('/register', methods=['POST'])
+@app.route('/register', methods=['POST', 'OPTIONS'])
 def register():
     global use_salting
+    if request.method == 'OPTIONS':
+        return add_cors_headers(jsonify({}), methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization'])
 
     data = request.get_json()
     if 'username' not in data or 'password' not in data:
-        return jsonify({'message': 'Username and password are required.'}), 400
+        response = jsonify({'message': 'Username and password are required.'})
+        return add_cors_headers(response, methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 400
     
     username = data['username']
     password = data['password'].encode("utf-8") # scrypt expects bytes so we use encode()
@@ -85,20 +96,25 @@ def register():
     try: 
         user = select_user(username)
         if user:
-            return jsonify({'message': 'Username already exists.'}), 400
+            response = jsonify({'message': 'Username already exists.'})
+            return add_cors_headers(response, methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 400
     except:
         pass
     
     new_user = {'name': username, 'salt': salt, 'hashed_password': hashed_password, 'role': 'user'}
     insert_user(new_user)
     
-    return jsonify({'message': 'Registration successful.'}), 201
+    response = jsonify({'message': 'Registration successful.'})
+    return add_cors_headers(response, methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 201
 
-@app.route('/login', methods=['POST'])
+@app.route('/login', methods=['POST', 'OPTIONS'])
 def login():
+    if request.method == 'OPTIONS':
+        return add_cors_headers(jsonify({}), methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization'])
     data = request.get_json()
     if 'username' not in data or 'password' not in data:
-        return jsonify({'message': 'Username and password are required.'}), 400
+        response = {'message': 'Username and password are required.'}
+        return add_cors_headers(jsonify(response), methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 400
     
     username = data['username']
     password = data['password'].encode("utf-8")
@@ -106,7 +122,8 @@ def login():
     try:
         user_in_db = select_user(username)
     except:
-        return jsonify({'message': 'Username not found.'}), 401
+        response = {'message': 'Username not found.'}
+        return add_cors_headers(jsonify(response), methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 401
     
     stored_salt = user_in_db.salt
     hashed_password = hashlib.scrypt(password, salt=stored_salt, n=N, r=R, p=P) 
@@ -118,9 +135,11 @@ def login():
             "exp": (datetime.utcnow() + timedelta(days=1)).timestamp()  # 1 day expiration
         }
         token = generate_jwt(payload)
-        return jsonify({'message': 'Login successful.', 'token': token}), 200
+        response = {'message': 'Login successful.', 'token': token}
+        return add_cors_headers(jsonify(response), methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 200
     else:
-        return jsonify({'message': 'Incorrect password.'}), 401
+        response = {'message': 'Incorrect password.'}
+        return add_cors_headers(jsonify(response), methods=['POST'], headers=['Origin', 'Accept', 'Content-Type', 'Authorization']), 401
 
 def generate_jwt(payload: dict) -> str:
     header_encoded = encode_jwt_header()
@@ -158,7 +177,6 @@ def select_user(user_name: str):
     cursor.execute("SELECT * FROM USERS WHERE name = ?", (user_name,))
     row = cursor.fetchone()
 
-    print()
     if row is None:
         raise Exception('User not found')
     
@@ -199,7 +217,7 @@ def initialize_database(db_path, table_name):
     conn.commit()
     conn.close()
 
-def create_table(cursor, table_name):
+def create_table(cursor):
     # Here, write the SQL query to create your table, for example:
     cursor.execute(f'''
     CREATE TABLE {DB_TABLE_USER} (
@@ -223,10 +241,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     global use_salting
+    global enable_cors
     use_salting = args.enable_salting
-
-    if args.enable_cors:
-        CORS(app)
+    enable_cors = args.enable_cors
 
     initialize_database(DB_NAME, DB_TABLE_USER)
 

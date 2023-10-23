@@ -29,8 +29,11 @@ Frontend should be able to communicate over https.
 #### Storing JWT token
 Frontend stores JWT token and reuses it in requests.
 
-### Database (TODO)
+### Database
 Currently the app uses an in-memory dictionary for storing data, this should be switched to a proper database (like SQLite). This will persist users after a server crash.
+
+### Password Validation (TODO)
+Add restrictions to what password characters, length etc. are allowed for the user password. Enforce in backend and communicate in frontend.
 
 ### Password Reset (TODO)
 A password rest function that involves involves generating a unique link or code, emailing it to the user, and then allowing the user to reset their password using that code.
@@ -41,7 +44,7 @@ Allows users to update their profile info after they log in. Enables changing pa
 ### Email Confirmation (TODO)
 Implements an email confirmation step when a user registers in order to reduce fake sign-ups.
 
-### Rate Limiting (TODO)
+### Rate Limiting / Captcha (TODO)
 Rate limiting to sensitive routes like /login to prevent brute force attacks.
 
 ### Logout (TODO)
@@ -62,8 +65,8 @@ Keeps track of failed login attempts, suspicious activities, and other security-
 ### API Protection (TODO)
 TBD but intention to use additional mechanism to protect API, like API keys, OAuth scopes, etc.
 
-### CORS (TODO)
-Once both a front-end app and a back-end API is served from different domains or ports, CORS is to be implemented and configured so that only trusted domains can make requests to the API.
+### CORS
+CORS is implemented with simple Allow-* headers and handling of the OPTIONS pre-flight request from the brower. Userpage token verification is bypassed for the pre-flight request.
 
 ## Prerequisites
 
