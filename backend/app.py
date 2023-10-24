@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from collections import namedtuple
 import os
@@ -15,8 +15,8 @@ app = Flask(__name__)
 
 users_db = {}
 
-CERT_PEM_PATH = 'certificate/cert.pem'
-KEY_PEM_PATH = 'certificate/key.pem'
+CERT_PEM_PATH = 'certificate/localhost+2.pem'
+KEY_PEM_PATH = 'certificate/localhost+2-key.pem'
 JWT_SIG_KEY = os.urandom(24).hex() # A random key for signing JWT tokens
 SALT_LENGTH = 16
 DB_NAME = "USER_DB"
@@ -113,12 +113,21 @@ def login():
     stored_password = user_in_db.hashed_password
 
     if stored_password == hashed_password:
-        payload = {
+        access_payload = {
+            "username": username,
+            "exp": (datetime.utcnow() + timedelta(minutes=2)).timestamp()  # 2 minutes expiration
+        }
+        refresh_payload = {
             "username": username,
             "exp": (datetime.utcnow() + timedelta(days=1)).timestamp()  # 1 day expiration
         }
-        token = generate_jwt(payload)
-        return jsonify({'message': 'Login successful.', 'token': token}), 200
+        access_token = generate_jwt(access_payload)
+        refresh_token = generate_jwt(refresh_payload)
+
+        response = make_response(jsonify({'message': 'Login successful.', 'token': access_token}), 200)
+        response.set_cookie('refresh-token', refresh_token, path="/", secure=True, httponly=True, domain='localhost', samesite='None')
+
+        return response
     else:
         return jsonify({'message': 'Incorrect password.'}), 401
 
@@ -226,7 +235,7 @@ if __name__ == '__main__':
     use_salting = args.enable_salting
 
     if args.enable_cors:
-        CORS(app)
+        CORS(app, supports_credentials=True)
 
     initialize_database(DB_NAME, DB_TABLE_USER)
 

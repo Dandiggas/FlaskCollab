@@ -12,7 +12,7 @@ function UserPage() {
     setJwtToken(token);
 
     if (username && jwtToken) {
-      fetch(`http://localhost:2000/userpage/${encodeURIComponent(username)}`, {
+      fetch(`https://localhost:2000/userpage/${encodeURIComponent(username)}`, {
         headers: {
           'Authorization': `Bearer ${jwtToken}`
         }

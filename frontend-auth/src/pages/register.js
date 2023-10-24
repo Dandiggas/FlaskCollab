@@ -8,7 +8,7 @@ const Register = () => {
 
   const registerUser = async () => {
     try {
-      const response = await axios.post('http://localhost:2000/register', {
+      const response = await axios.post('https://localhost:2000/register', {
         username: username,
         password: password
       });

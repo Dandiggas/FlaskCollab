@@ -1,29 +1,44 @@
 const fs = require('fs');
-const http = require('http');
+const path = require('path');
 const https = require('https');
-const httpProxy = require('http-proxy');
+const express = require('express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
-// Your Next.js app's usual HTTP port
-const target = 'http://localhost:3000/';
+const app = express();
 
-const proxy = httpProxy.createProxyServer({
-  target,
-  secure: false, // This is important as it allows the proxy to accept self-signed certificates.
+// Proxy endpoints
+const FRONTEND_TARGET = 'http://localhost:3000';
+const BACKEND_TARGET = 'https://localhost:2000';
+
+// Frontend proxy: All non-api requests are redirected to the frontend
+const frontendProxy = createProxyMiddleware({
+  target: FRONTEND_TARGET,
+  changeOrigin: true,
+  logLevel: 'debug', // This will log all proxy activity
 });
 
-proxy.on('error', function (err, req, res) {
-  res.writeHead(500, {
-    'Content-Type': 'text/plain',
-  });
-  res.end('Something went wrong.');
+// Backend proxy: All /api requests are redirected to the backend
+const backendProxy = createProxyMiddleware({
+  target: BACKEND_TARGET,
+  changeOrigin: true,
+  secure: false, // If you're using self-signed certificates
+  pathRewrite: {
+    '^/api': '', // remove the /api from the URL path
+  },
+  logLevel: 'debug',
 });
 
-// This part runs your HTTPS server
-const options = {
-  key: fs.readFileSync('path/to/your/key.pem', 'utf8'),
-  cert: fs.readFileSync('path/to/your/cert.pem', 'utf8'),
+// Apply the proxies
+app.use('/api', backendProxy); // This tells the proxy to use the backendProxy for any route that starts with '/api'
+app.use('/', frontendProxy);   // This tells the proxy to use the frontendProxy for all other routes
+
+// SSL configuration
+const sslOptions = {
+  key: fs.readFileSync(path.resolve(__dirname, '../certificate/key.pem'), 'utf8'),
+  cert: fs.readFileSync(path.resolve(__dirname, '../certificate/cert.pem'), 'utf8'),
 };
 
-https.createServer(options, (req, res) => {
-  proxy.web(req, res);
-}).listen(8000);  // Proxy listens on this port. Your frontend will be accessible via https://localhost:8000/
+// Start server
+https.createServer(sslOptions, app).listen(8000, () => {
+  console.log('Listening on https://localhost:8000');
+});
