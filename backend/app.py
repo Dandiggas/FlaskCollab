@@ -115,11 +115,13 @@ def login():
     if stored_password == hashed_password:
         access_payload = {
             "username": username,
-            "exp": (datetime.utcnow() + timedelta(minutes=2)).timestamp()  # 2 minutes expiration
+            "exp": (datetime.utcnow() + timedelta(minutes=2)).timestamp(),  # 2 minutes expiration
+            "type": "access" # This is an access token, intended for authorizing the user access to protected resources
         }
         refresh_payload = {
             "username": username,
-            "exp": (datetime.utcnow() + timedelta(days=1)).timestamp()  # 1 day expiration
+            "exp": (datetime.utcnow() + timedelta(days=1)).timestamp(),  # 1 day expiration
+            "type": "refresh"
         }
         access_token = generate_jwt(access_payload)
         refresh_token = generate_jwt(refresh_payload)

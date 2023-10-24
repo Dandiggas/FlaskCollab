@@ -50,8 +50,12 @@ A logout mechanism. Since JWTs are stateless this is accomplished by maintaining
 ### Role-Based Authorization (TODO)
 Extends the authorization to not just check if a user is authenticated, but also check for specific roles or permissions.
 
-### Refresh Tokens (TOOD)
+### Refresh Tokens (TODO)
 Short-lived JWTs are used along with refresh tokens when they expire are used rather than long-life JWTs.
+
+#### Storage of Refresh Tokens On Server (TODO)
+
+#### Revoking Refresh Tokens (TODO)
 
 ### OAuth (TODO)
 OAuth-based authentication is used so that users can log in using Google, Facebook, or other providers.
